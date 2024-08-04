@@ -109,7 +109,7 @@ if(UNIX)
     endif (APPLE)
 endif(UNIX)
 
-target_include_directories(discord-rpc PRIVATE ${RAPIDJSON}/include)
+include(${CMAKE_SOURCE_DIR}/thirdparty/rapidjson.cmake)
 
 if (NOT ${ENABLE_IO_THREAD})
     target_compile_definitions(discord-rpc PUBLIC -DDISCORD_DISABLE_IO_THREAD)
