@@ -1,10 +1,10 @@
-cmake_minimum_required (VERSION 3.2.0)
+cmake_minimum_required (VERSION 3.26)
 project (DiscordRPC)
 
 include(get_cpm.cmake)
 include(GNUInstallDirs)
 
-option(BUILD_EXAMPLES "Build example apps" ON)
+option(BUILD_EXAMPLES "Build example apps" OFF)
 
 # format
 file(GLOB_RECURSE ALL_SOURCE_FILES
