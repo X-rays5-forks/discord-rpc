@@ -2,8 +2,8 @@
 
 // This is to wrap the platform specific kinds of connect/read/write.
 
-#include <stdint.h>
-#include <stdlib.h>
+#include <cstdint>
+#include <cstdlib>
 
 // not really connectiony, but need per-platform
 int GetProcessId();

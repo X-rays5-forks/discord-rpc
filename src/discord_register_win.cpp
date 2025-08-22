@@ -6,8 +6,8 @@
 #define NOSERVICE
 #define NOIME
 #include <cstdio>
-#include <psapi.h>
 #include <windows.h>
+#include <psapi.h>
 
 /**
  * Updated fixes for MinGW and WinXP

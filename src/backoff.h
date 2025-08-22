@@ -1,9 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
+#include <ctime>
 #include <random>
-#include <stdint.h>
-#include <time.h>
 
 struct Backoff {
   int64_t minAmount;
@@ -17,7 +17,7 @@ struct Backoff {
 
   Backoff(const int64_t min, const int64_t max)
       : minAmount(min), maxAmount(max), current(min), fails(0),
-        randGenerator((uint64_t)time(0)) {}
+        randGenerator(static_cast<uint64_t>(time(nullptr))) {}
 
   void reset() {
     fails = 0;

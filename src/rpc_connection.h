@@ -2,6 +2,7 @@
 
 #include "connection.h"
 #include "serialization.h"
+#include <glaze/glaze.hpp>
 
 // I took this from the buffer size libuv uses for named pipes; I suspect ours
 // would usually be much smaller.
@@ -27,7 +28,7 @@ struct RpcConnection {
     uint32_t length;
   };
 
-  struct MessageFrame : public MessageFrameHeader {
+  struct MessageFrame : MessageFrameHeader {
     char message[MaxRpcFrameSize - sizeof(MessageFrameHeader)];
   };
 
@@ -40,12 +41,12 @@ struct RpcConnection {
 
   BaseConnection *connection{nullptr};
   State state{State::Disconnected};
-  void (*onConnect)(JsonDocument &message){nullptr};
+  void (*onConnect)(glz::json_t& message){nullptr};
   void (*onDisconnect)(int errorCode, const char *message){nullptr};
   char appId[64]{};
   int lastErrorCode{0};
   char lastErrorMessage[256]{};
-  RpcConnection::MessageFrame sendFrame;
+  MessageFrame sendFrame;
 
   static RpcConnection *Create(const char *applicationId);
   static void Destroy(RpcConnection *&);
@@ -55,5 +56,5 @@ struct RpcConnection {
   void Open();
   void Close();
   bool Write(const void *data, size_t length);
-  bool Read(JsonDocument &message);
+  bool Read(glz::json_t& message);
 };

@@ -1,9 +1,10 @@
 #include "rpc_connection.h"
 #include "serialization.h"
 
-#include <atomic>
+#include <glaze/glaze.hpp>
+#include <utility>
 
-static const int RpcVersion = 1;
+static constexpr int RpcVersion = 1;
 static RpcConnection Instance;
 
 /*static*/ RpcConnection *RpcConnection::Create(const char *applicationId) {
@@ -28,11 +29,17 @@ void RpcConnection::Open() {
   }
 
   if (state == State::SentHandshake) {
-    JsonDocument message;
+    glz::json_t message;
     if (Read(message)) {
-      auto cmd = GetStrMember(&message, "cmd");
-      auto evt = GetStrMember(&message, "evt");
-      if (cmd && evt && !strcmp(cmd, "DISPATCH") && !strcmp(evt, "READY")) {
+      std::string cmd;
+      if (!message["cmd"].is_null()) {
+        cmd = message["cmd"].get_string();
+      }
+      std::string evt;
+      if (!message["evt"].is_null()) {
+        evt = message["evt"].get_string();
+      }
+      if (!cmd.empty() && !evt.empty() && !strcmp(cmd.c_str(), "DISPATCH") && !strcmp(evt.c_str(), "READY")) {
         state = State::Connected;
         if (onConnect) {
           onConnect(message);
@@ -41,11 +48,9 @@ void RpcConnection::Open() {
     }
   } else {
     sendFrame.opcode = Opcode::Handshake;
-    sendFrame.length = (uint32_t)JsonWriteHandshakeObj(
-        sendFrame.message, sizeof(sendFrame.message), RpcVersion, appId);
+    sendFrame.length = static_cast<uint32_t>(JsonWriteHandshakeObj(sendFrame.message, sizeof(sendFrame.message), RpcVersion, appId));
 
-    if (connection->Write(&sendFrame,
-                          sizeof(MessageFrameHeader) + sendFrame.length)) {
+    if (connection->Write(&sendFrame, sizeof(MessageFrameHeader) + sendFrame.length)) {
       state = State::SentHandshake;
     } else {
       Close();
@@ -62,10 +67,10 @@ void RpcConnection::Close() {
   state = State::Disconnected;
 }
 
-bool RpcConnection::Write(const void *data, size_t length) {
+bool RpcConnection::Write(const void *data, const size_t length) {
   sendFrame.opcode = Opcode::Frame;
   memcpy(sendFrame.message, data, length);
-  sendFrame.length = (uint32_t)length;
+  sendFrame.length = static_cast<uint32_t>(length);
   if (!connection->Write(&sendFrame, sizeof(MessageFrameHeader) + length)) {
     Close();
     return false;
@@ -73,7 +78,7 @@ bool RpcConnection::Write(const void *data, size_t length) {
   return true;
 }
 
-bool RpcConnection::Read(JsonDocument &message) {
+bool RpcConnection::Read(glz::json_t& message) {
   if (state != State::Connected && state != State::SentHandshake) {
     return false;
   }
@@ -82,7 +87,7 @@ bool RpcConnection::Read(JsonDocument &message) {
     bool didRead = connection->Read(&readFrame, sizeof(MessageFrameHeader));
     if (!didRead) {
       if (!connection->isOpen) {
-        lastErrorCode = (int)ErrorCode::PipeClosed;
+        lastErrorCode = std::to_underlying(ErrorCode::PipeClosed);
         StringCopy(lastErrorMessage, "Pipe closed");
         Close();
       }
@@ -92,7 +97,7 @@ bool RpcConnection::Read(JsonDocument &message) {
     if (readFrame.length > 0) {
       didRead = connection->Read(readFrame.message, readFrame.length);
       if (!didRead) {
-        lastErrorCode = (int)ErrorCode::ReadCorrupt;
+        lastErrorCode = std::to_underlying(ErrorCode::ReadCorrupt);
         StringCopy(lastErrorMessage, "Partial data in frame");
         Close();
         return false;
@@ -100,21 +105,23 @@ bool RpcConnection::Read(JsonDocument &message) {
       readFrame.message[readFrame.length] = 0;
     }
 
+    glz::error_ctx ec;
     switch (readFrame.opcode) {
     case Opcode::Close: {
-      message.ParseInsitu(readFrame.message);
-      lastErrorCode = GetIntMember(&message, "code");
-      StringCopy(lastErrorMessage, GetStrMember(&message, "message", ""));
+      ec = glz::read_json(message, readFrame.message);
+      assert(!ec);
+      lastErrorCode = message["code"].as<std::int32_t>();
+      StringCopy(lastErrorMessage, message["message"].get_string().c_str());
       Close();
       return false;
     }
     case Opcode::Frame:
-      message.ParseInsitu(readFrame.message);
+      ec = glz::read_json(message, readFrame.message);
+      assert(!ec);
       return true;
     case Opcode::Ping:
       readFrame.opcode = Opcode::Pong;
-      if (!connection->Write(&readFrame,
-                             sizeof(MessageFrameHeader) + readFrame.length)) {
+      if (!connection->Write(&readFrame, sizeof(MessageFrameHeader) + readFrame.length)) {
         Close();
       }
       break;
@@ -123,7 +130,7 @@ bool RpcConnection::Read(JsonDocument &message) {
     case Opcode::Handshake:
     default:
       // something bad happened
-      lastErrorCode = (int)ErrorCode::ReadCorrupt;
+      lastErrorCode = std::to_underlying(ErrorCode::ReadCorrupt);
       StringCopy(lastErrorMessage, "Bad ipc frame");
       Close();
       return false;
