@@ -4,7 +4,7 @@ option(ENABLE_IO_THREAD "Start up a separate I/O thread, otherwise I'd need to c
 option(USE_STATIC_CRT "Use /MT[d] for dynamic library" OFF)
 option(WARNINGS_AS_ERRORS "When enabled, compiles with `-Werror` (on *nix platforms)." OFF)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 23)
 
 set(BASE_RPC_SRC
     ${PROJECT_SOURCE_DIR}/include/discord_rpc.h
@@ -108,7 +108,7 @@ if(UNIX)
     endif (APPLE)
 endif(UNIX)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/rapidjson.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/glaze.cmake)
 
 if (NOT ${ENABLE_IO_THREAD})
     target_compile_definitions(discord-rpc PUBLIC -DDISCORD_DISABLE_IO_THREAD)
