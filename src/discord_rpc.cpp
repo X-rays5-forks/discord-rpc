@@ -184,7 +184,7 @@ static void Discord_UpdateConnection(void)
         } else if (strcmp(evtName.c_str(), "ACTIVITY_SPECTATE") == 0) {
           if (!message["data"]["secret"].is_null()) {
             StringCopy(SpectateGameSecret, message["data"]["secret"].get_string().c_str());
-            WasJoinGame.store(true);
+            WasSpectateGame.store(true);
           }
         } else if (strcmp(evtName.c_str(), "ACTIVITY_JOIN_REQUEST") == 0) {
           std::string userId;
