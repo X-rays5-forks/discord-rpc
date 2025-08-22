@@ -13,12 +13,6 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
     src/*.cpp src/*.h src/*.c
 )
 
-# thirdparty stuff
-execute_process(
-    COMMAND mkdir ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
-    ERROR_QUIET
-)
-
 # add subdirs
 
 add_subdirectory(src)
