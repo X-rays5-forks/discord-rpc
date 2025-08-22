@@ -183,7 +183,7 @@ static void Discord_UpdateConnection(void)
           }
         } else if (strcmp(evtName.c_str(), "ACTIVITY_SPECTATE") == 0) {
           if (!message["data"]["secret"].is_null()) {
-            StringCopy(JoinGameSecret, message["data"]["secret"].get_string().c_str());
+            StringCopy(SpectateGameSecret, message["data"]["secret"].get_string().c_str());
             WasJoinGame.store(true);
           }
         } else if (strcmp(evtName.c_str(), "ACTIVITY_JOIN_REQUEST") == 0) {
@@ -196,7 +196,7 @@ static void Discord_UpdateConnection(void)
             username = message["data"]["user"]["username"].get_string();
           }
           std::string avatar;
-          if (message["data"]["user"]["avatar"].is_null()) {
+          if (!message["data"]["user"]["avatar"].is_null()) {
             avatar = message["data"]["user"]["avatar"].get_string();
           }
           auto joinReq = JoinAskQueue.GetNextAddMessage();
@@ -323,7 +323,7 @@ Discord_Initialize(const char *applicationId, const DiscordEventHandlers *handle
       username = readyMessage["data"]["user"]["username"].get_string();
     }
     std::string avatar;
-    if (readyMessage["data"]["user"]["avatar"].is_null()) {
+    if (!readyMessage["data"]["user"]["avatar"].is_null()) {
       avatar = readyMessage["data"]["user"]["avatar"].get_string();
     }
     if (!userId.empty() && !username.empty()) {

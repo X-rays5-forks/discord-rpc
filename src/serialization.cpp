@@ -29,13 +29,13 @@ size_t JsonWriteRichPresenceObj(char *dest, size_t maxLen, const int nonce, cons
       message["args"]["activity"]["assets"]["large_image"] = presence->largeImageKey;
     }
     if (presence->largeImageText) {
-      message["args"]["activity"]["large_text"] = presence->largeImageText;
+      message["args"]["activity"]["assets"]["large_text"] = presence->largeImageText;
     }
     if (presence->smallImageKey) {
       message["args"]["activity"]["assets"]["small_image"] = presence->smallImageKey;
     }
     if (presence->smallImageText) {
-      message["args"]["activity"]["small_text"] = presence->smallImageText;
+      message["args"]["activity"]["assets"]["small_text"] = presence->smallImageText;
     }
 
     /** party */
