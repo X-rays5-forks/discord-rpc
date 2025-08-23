@@ -1,139 +1,163 @@
-#include "rpc_connection.h"
 #include "serialization.h"
+#include "connection.h"
+#include "discord_rpc.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4800)
+#pragma warning(disable : 5045)
 #include <glaze/glaze.hpp>
-#include <utility>
+#pragma warning(pop)
 
-static constexpr int RpcVersion = 1;
-static RpcConnection Instance;
+#pragma warning(push)
+#pragma warning(disable : 5246)
 
-/*static*/ RpcConnection *RpcConnection::Create(const char *applicationId) {
-  Instance.connection = BaseConnection::Create();
-  StringCopy(Instance.appId, applicationId);
-  return &Instance;
-}
+size_t JsonWriteRichPresenceObj(char *dest, const size_t maxLen, const int nonce, const int pid, const DiscordRichPresence *presence) {
+  glz::json_t message;
+  message["nonce"] = (double)nonce;
+  message["cmd"] = "SET_ACTIVITY";
+  message["args"]["pid"] = (double)pid;
+  if (presence) {
+    message["args"]["activity"]["state"] = presence->state;
+    message["args"]["activity"]["details"] = presence->details;
 
-/*static*/ void RpcConnection::Destroy(RpcConnection *&c) {
-  c->Close();
-  BaseConnection::Destroy(c->connection);
-  c = nullptr;
-}
-
-void RpcConnection::Open() {
-  if (state == State::Connected) {
-    return;
-  }
-
-  if (state == State::Disconnected && !connection->Open()) {
-    return;
-  }
-
-  if (state == State::SentHandshake) {
-    glz::json_t message;
-    if (Read(message)) {
-      std::string cmd;
-      if (!message["cmd"].is_null()) {
-        cmd = message["cmd"].get_string();
-      }
-      std::string evt;
-      if (!message["evt"].is_null()) {
-        evt = message["evt"].get_string();
-      }
-      if (!cmd.empty() && !evt.empty() && !strcmp(cmd.c_str(), "DISPATCH") && !strcmp(evt.c_str(), "READY")) {
-        state = State::Connected;
-        if (onConnect) {
-          onConnect(message);
-        }
-      }
+    /** timestamp */
+    if (presence->startTimestamp) {
+      message["args"]["activity"]["timestamps"]["start"] = (double)presence->startTimestamp;
     }
-  } else {
-    sendFrame.opcode = Opcode::Handshake;
-    sendFrame.length = static_cast<uint32_t>(JsonWriteHandshakeObj(sendFrame.message, sizeof(sendFrame.message), RpcVersion, appId));
-
-    if (connection->Write(&sendFrame, sizeof(MessageFrameHeader) + sendFrame.length)) {
-      state = State::SentHandshake;
-    } else {
-      Close();
-    }
-  }
-}
-
-void RpcConnection::Close() {
-  if (onDisconnect &&
-      (state == State::Connected || state == State::SentHandshake)) {
-    onDisconnect(lastErrorCode, lastErrorMessage);
-  }
-  connection->Close();
-  state = State::Disconnected;
-}
-
-bool RpcConnection::Write(const void *data, const size_t length) {
-  sendFrame.opcode = Opcode::Frame;
-  memcpy(sendFrame.message, data, length);
-  sendFrame.length = static_cast<uint32_t>(length);
-  if (!connection->Write(&sendFrame, sizeof(MessageFrameHeader) + length)) {
-    Close();
-    return false;
-  }
-  return true;
-}
-
-bool RpcConnection::Read(glz::json_t& message) {
-  if (state != State::Connected && state != State::SentHandshake) {
-    return false;
-  }
-  MessageFrame readFrame;
-  for (;;) {
-    bool didRead = connection->Read(&readFrame, sizeof(MessageFrameHeader));
-    if (!didRead) {
-      if (!connection->isOpen) {
-        lastErrorCode = std::to_underlying(ErrorCode::PipeClosed);
-        StringCopy(lastErrorMessage, "Pipe closed");
-        Close();
-      }
-      return false;
+    if (presence->endTimestamp) {
+      message["args"]["activity"]["timestamps"]["end"] = (double)presence->endTimestamp;
     }
 
-    if (readFrame.length > 0) {
-      didRead = connection->Read(readFrame.message, readFrame.length);
-      if (!didRead) {
-        lastErrorCode = std::to_underlying(ErrorCode::ReadCorrupt);
-        StringCopy(lastErrorMessage, "Partial data in frame");
-        Close();
-        return false;
-      }
-      readFrame.message[readFrame.length] = 0;
+    /** assets */
+    if (presence->largeImageKey) {
+      message["args"]["activity"]["assets"]["large_image"] = presence->largeImageKey;
+    }
+    if (presence->largeImageText) {
+      message["args"]["activity"]["assets"]["large_text"] = presence->largeImageText;
+    }
+    if (presence->smallImageKey) {
+      message["args"]["activity"]["assets"]["small_image"] = presence->smallImageKey;
+    }
+    if (presence->smallImageText) {
+      message["args"]["activity"]["assets"]["small_text"] = presence->smallImageText;
     }
 
-    glz::error_ctx ec;
-    switch (readFrame.opcode) {
-    case Opcode::Close: {
-      ec = glz::read_json(message, readFrame.message);
-      assert(!ec);
-      lastErrorCode = message["code"].as<std::int32_t>();
-      StringCopy(lastErrorMessage, message["message"].get_string().c_str());
-      Close();
-      return false;
-    }
-    case Opcode::Frame:
-      ec = glz::read_json(message, readFrame.message);
-      assert(!ec);
-      return true;
-    case Opcode::Ping:
-      readFrame.opcode = Opcode::Pong;
-      if (!connection->Write(&readFrame, sizeof(MessageFrameHeader) + readFrame.length)) {
-        Close();
+    /** party */
+    if (presence->partyId) {
+      message["args"]["activity"]["party"]["id"] = presence->partyId;
+      if (presence->partySize && presence->partyMax) {
+        message["args"]["activity"]["party"]["size"] = glz::json_t::array_t{(double)presence->partySize, (double)presence->partyMax};
       }
-      break;
-    case Opcode::Pong:
-      break;
-    case Opcode::Handshake:
-    default:
-      // something bad happened
-      lastErrorCode = std::to_underlying(ErrorCode::ReadCorrupt);
-      StringCopy(lastErrorMessage, "Bad ipc frame");
-      Close();
-      return false;
+      if (presence->partyPrivacy) {
+        message["args"]["activity"]["party"]["privacy"] = (double)presence->partyPrivacy;
+      }
     }
+
+    if (presence->matchSecret && presence->joinSecret && presence->spectateSecret) {
+      message["args"]["activity"]["secrets"]["match"] = presence->matchSecret;
+      message["args"]["activity"]["secrets"]["join"] = presence->joinSecret;
+      message["args"]["activity"]["secrets"]["spectate"] = presence->spectateSecret;
+    }
+
+    message["args"]["activity"]["instance"] = presence->instance != 0;
   }
+
+  std::string buff{};
+  const auto ec = glz::write_json(message, buff);
+  assert(!ec);
+
+  size_t len = buff.size();
+  if (len >= maxLen) {
+    len = maxLen - 1; // leave space for null terminator
+  }
+
+  std::memcpy(dest, buff.data(), len);
+  dest[len] = '\0';
+
+  return len;
 }
+
+size_t JsonWriteHandshakeObj(char *dest, const size_t maxLen, int version, const char *applicationId) {
+  glz::json_t message;
+  message["v"] = (double)version;
+  message["client_id"] = applicationId;
+
+  std::string buff{};
+  const auto ec = glz::write_json(message, buff);
+  assert(!ec);
+
+  size_t len = buff.size();
+  if (len >= maxLen) {
+    len = maxLen - 1; // leave space for null terminator
+  }
+
+  std::memcpy(dest, buff.data(), len);
+  dest[len] = '\0';
+
+  return len;
+}
+
+size_t JsonWriteSubscribeCommand(char *dest, size_t maxLen, int nonce, const char *evtName) {
+  glz::json_t message;
+  message["nonce"] = (double)nonce;
+  message["cmd"] = "SUBSCRIBE";
+  message["evt"] = evtName;
+
+  std::string buff{};
+  const auto ec = glz::write_json(message, buff);
+  assert(!ec);
+
+  size_t len = buff.size();
+  if (len >= maxLen) {
+    len = maxLen - 1;
+  }
+
+  std::memcpy(dest, buff.data(), len);
+  dest[len] = '\0';
+
+  return len;
+}
+
+size_t JsonWriteUnsubscribeCommand(char *dest, const size_t maxLen, int nonce, const char *evtName) {
+  glz::json_t message;
+  message["nonce"] = (double)nonce;
+  message["cmd"] = "UNSUBSCRIBE";
+  message["evt"] = evtName;
+
+  std::string buff{};
+  const auto ec = glz::write_json(message, buff);
+  assert(!ec);
+
+  size_t len = buff.size();
+  if (len >= maxLen) {
+    len = maxLen - 1;
+  }
+
+  std::memcpy(dest, buff.data(), len);
+  dest[len] = '\0';
+
+  return len;
+}
+
+size_t JsonWriteJoinReply(char *dest, const size_t maxLen, const char *userId, const int reply, const int nonce) {
+  glz::json_t message;
+  message["cmd"] = reply == DISCORD_REPLY_YES ? "SEND_ACTIVITY_JOIN_INVITE" : "CLOSE_ACTIVITY_JOIN_REQUEST";
+  message["nonce"] = (double)nonce;
+  message["args"]["user_id"] = userId;
+
+  std::string buff{};
+  const auto ec = glz::write_json(message, buff);
+  assert(!ec);
+
+  size_t len = buff.size();
+  if (len >= maxLen) {
+    len = maxLen - 1;
+  }
+
+  std::memcpy(dest, buff.data(), len);
+  dest[len] = '\0';
+
+  return len;
+}
+
+#pragma warning(pop)
