@@ -2,26 +2,30 @@
 #include "connection.h"
 #include "discord_rpc.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4800)
+#pragma warning(disable : 5045)
 #include <glaze/glaze.hpp>
+#pragma warning(pop)
 
 #pragma warning(push)
 #pragma warning(disable : 5246)
 
-size_t JsonWriteRichPresenceObj(char *dest, size_t maxLen, const int nonce, const int pid, const DiscordRichPresence *presence) {
+size_t JsonWriteRichPresenceObj(char *dest, const size_t maxLen, const int nonce, const int pid, const DiscordRichPresence *presence) {
   glz::json_t message;
-  message["nonce"] = nonce;
+  message["nonce"] = (double)nonce;
   message["cmd"] = "SET_ACTIVITY";
-  message["args"]["pid"] = pid;
+  message["args"]["pid"] = (double)pid;
   if (presence) {
     message["args"]["activity"]["state"] = presence->state;
     message["args"]["activity"]["details"] = presence->details;
 
     /** timestamp */
     if (presence->startTimestamp) {
-      message["args"]["activity"]["timestamps"]["start"] = presence->startTimestamp;
+      message["args"]["activity"]["timestamps"]["start"] = (double)presence->startTimestamp;
     }
     if (presence->endTimestamp) {
-      message["args"]["activity"]["timestamps"]["end"] = presence->endTimestamp;
+      message["args"]["activity"]["timestamps"]["end"] = (double)presence->endTimestamp;
     }
 
     /** assets */
@@ -42,10 +46,10 @@ size_t JsonWriteRichPresenceObj(char *dest, size_t maxLen, const int nonce, cons
     if (presence->partyId) {
       message["args"]["activity"]["party"]["id"] = presence->partyId;
       if (presence->partySize && presence->partyMax) {
-        message["args"]["activity"]["party"]["size"] = std::array<std::int32_t, 2>{presence->partySize, presence->partyMax};
+        message["args"]["activity"]["party"]["size"] = glz::json_t::array_t{(double)presence->partySize, (double)presence->partyMax};
       }
       if (presence->partyPrivacy) {
-        message["args"]["activity"]["party"]["privacy"] = presence->partyPrivacy;
+        message["args"]["activity"]["party"]["privacy"] = (double)presence->partyPrivacy;
       }
     }
 
@@ -75,7 +79,7 @@ size_t JsonWriteRichPresenceObj(char *dest, size_t maxLen, const int nonce, cons
 
 size_t JsonWriteHandshakeObj(char *dest, const size_t maxLen, int version, const char *applicationId) {
   glz::json_t message;
-  message["v"] = version;
+  message["v"] = (double)version;
   message["client_id"] = applicationId;
 
   std::string buff{};
@@ -95,7 +99,7 @@ size_t JsonWriteHandshakeObj(char *dest, const size_t maxLen, int version, const
 
 size_t JsonWriteSubscribeCommand(char *dest, size_t maxLen, int nonce, const char *evtName) {
   glz::json_t message;
-  message["nonce"] = nonce;
+  message["nonce"] = (double)nonce;
   message["cmd"] = "SUBSCRIBE";
   message["evt"] = evtName;
 
@@ -116,7 +120,7 @@ size_t JsonWriteSubscribeCommand(char *dest, size_t maxLen, int nonce, const cha
 
 size_t JsonWriteUnsubscribeCommand(char *dest, const size_t maxLen, int nonce, const char *evtName) {
   glz::json_t message;
-  message["nonce"] = nonce;
+  message["nonce"] = (double)nonce;
   message["cmd"] = "UNSUBSCRIBE";
   message["evt"] = evtName;
 
@@ -138,7 +142,7 @@ size_t JsonWriteUnsubscribeCommand(char *dest, const size_t maxLen, int nonce, c
 size_t JsonWriteJoinReply(char *dest, const size_t maxLen, const char *userId, const int reply, const int nonce) {
   glz::json_t message;
   message["cmd"] = reply == DISCORD_REPLY_YES ? "SEND_ACTIVITY_JOIN_INVITE" : "CLOSE_ACTIVITY_JOIN_REQUEST";
-  message["nonce"] = nonce;
+  message["nonce"] = (double)nonce;
   message["args"]["user_id"] = userId;
 
   std::string buff{};
